@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK V2
 
 on:
   workflow_dispatch:
@@ -17,20 +17,48 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Extract Android project
+      - name: Find and extract V2 project
         run: |
+          ZIP=$(find . -maxdepth 1 -type f -name '*v2*Project.zip' | head -1)
+          if [ -z "$ZIP" ]; then
+            echo "File project V2 tidak ditemukan"
+            ls -lah
+            exit 1
+          fi
+
           mkdir project
-          unzip -q 30_Hari_Balik_Sehat_Android_Project.zip -d project
+          unzip -q "$ZIP" -d project
+
+          echo "Isi project:"
+          find project -maxdepth 3 -type f | head -50
+
+      - name: Locate Android project
+        run: |
+          SETTINGS=$(find project -name settings.gradle -o -name settings.gradle.kts | head -1)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "settings.gradle tidak ditemukan"
+            find project -maxdepth 4 -type f
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          echo "Android project ditemukan di: $PROJECT_DIR"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build APK
-        working-directory: project
+        working-directory: ${{ env.PROJECT_DIR }}
         run: gradle assembleDebug
+
+      - name: Check APK
+        run: |
+          find "$PROJECT_DIR/app/build/outputs/apk" -type f -name "*.apk" -ls
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: 30-Hari-Balik-Sehat-APK
-          path: project/app/build/outputs/apk/debug/app-debug.apk
+          name: 30-Hari-Balik-Sehat-V2-APK
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
